@@ -13,5 +13,9 @@
         android:id="@+id/action_emailcsvs"
         android:showAsAction="never"
         android:title="@string/action_emailcsvs"/>
+    <item
+        android:id="@+id/action_microphone"
+        android:showAsAction="never"
+        android:title="Microphone"/>
 
 </menu>

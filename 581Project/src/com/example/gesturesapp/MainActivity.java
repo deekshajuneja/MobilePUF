@@ -11,6 +11,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.Editor;
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
+import android.media.AudioRecord;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
@@ -113,7 +114,7 @@ public class MainActivity extends Activity
         challenge.add(randPntInBnds());
         int rejectionPoint = 50;
 
-        // ensure that none of the points are too close to eachother
+        // ensure that none of the points are too close to each other
         boolean badPath = false;
         for (int i = 0; i < challenge.size() && !badPath; i++)
         {
@@ -131,8 +132,7 @@ public class MainActivity extends Activity
 
         if (badPath)
         {
-            return generateChallenge(); // TODO: probably the laziest way to do
-                                        // this.
+            return generateChallenge(); // TODO: probably the laziest way to do this.
         }
         else
         {
@@ -155,7 +155,7 @@ public class MainActivity extends Activity
         challenge.add(randPntInBnds());
         int rejectionPoint = 100;
 
-        // ensure that none of the points are too close to eachother
+        // ensure that none of the points are too close to each other
         boolean badPath = false;
         for (int i = 0; i < challenge.size() && !badPath; i++)
         {
@@ -173,8 +173,7 @@ public class MainActivity extends Activity
 
         if (badPath)
         {
-            return generateChallenge(); // TODO: probably the laziest way to do
-                                        // this.
+            return generateChallenge(); // TODO: probably the laziest way to do this.
         }
         else
         {
@@ -192,7 +191,7 @@ public class MainActivity extends Activity
         challenge.add(randPntInBnds());
         int rejectionPoint = 400;
 
-        // ensure that none of the points are too close to eachother
+        // ensure that none of the points are too close to each other
         boolean badPath = false;
         for (int i = 0; i < challenge.size() && !badPath; i++)
         {
@@ -210,8 +209,7 @@ public class MainActivity extends Activity
 
         if (badPath)
         {
-            return generateChallenge(); // TODO: probably the laziest way to do
-                                        // this.
+            return generateChallenge(); // TODO: probably the laziest way to do this.
         }
         else
         {
@@ -238,6 +236,14 @@ public class MainActivity extends Activity
     public boolean onOptionsItemSelected(MenuItem item)
     {
         int itemId = item.getItemId();
+        if(itemId == R.id.action_microphone)
+        {
+            //display microphone page
+            Intent intent = new Intent(this, Audio_Record.class);
+            startActivity(intent);
+
+            return true;
+        }
         if (itemId == R.id.action_settings)
         {
             // Display Settings page
@@ -296,7 +302,7 @@ public class MainActivity extends Activity
         startActivity(Intent.createChooser(i, "E-mail"));
 
         ArrayList<Uri> uris = new ArrayList<Uri>();
-        // convert from paths to Android friendly Parcelable Uri's
+        // convert from paths to Android friendly parse-able Uri's
         for (File fileIn : files)
         {
             Uri u = Uri.fromFile(fileIn);

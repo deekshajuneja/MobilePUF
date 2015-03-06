@@ -1,7 +1,7 @@
-import math, random
+import math
 import numpy
 import os
-import SoundUtil
+#import SoundUtil
 from os.path import join, dirname, basename
 import io
 #from pylab import *
@@ -31,63 +31,84 @@ class profilePoint:
                 return True
         return False
 
+
+def findStartEnd(pcmFile, amp_limit):
+    #Opens the file into an array
+    data = numpy.memmap(pcmFile, dtype='int16')
+    startPos = -1
+    endPos = len(data)
+    
+    for i in range(1000, len(data) - 10):
+        if abs(data[i]) > amp_limit:
+            #Once an appropriate peak is found
+            #Checks how many of the 20 surrounding points are also high
+            pointsPassed = 0
+            for j in range(i-10, i+10):
+                if abs(data[j]) > amp_limit:
+                    pointsPassed += 1
+            if pointsPassed > 12:
+                startPos = i
+                break
+
+    for i in range(len(data) - 10, 1000, -1):
+        if abs(data[i]) > amp_limit:
+            #Once an appropriate peak is found
+            #Checks how many of the 20 surrounding points are also high
+            pointsPassed = 0
+            for j in range(i-10, i+10):
+                if abs(data[j]) > amp_limit:
+                    pointsPassed += 1
+            if pointsPassed > 12:
+                endPos = i
+                break
+    return (startPos, endPos)
+    
 #Expands/Contracts lists of data samples to all be of length N, for profiling
-def preBuildProfile(dataSets):
-    avg = 0
-    #Per Jacob's algorithm, finds the average sample length
-    #If a given sample is too long, randomly combine two adjacent samples
-    #into a single point of their mean value, repeat until length
-
-    #If a given sample is too short, randomly insert a point between two
-    #adjacent samples using the mean value of those samples, repeat
-    for dataSet in dataSets:
-        avg += len(dataSet)
-    avg = avg/len(dataSets)
-    for i in range(len(dataSets)):
-        if len(dataSets[i]) > avg:
-            dataSets[i] = contract(dataSets[i], avg)
-        elif len(dataSets[i]) < avg:
-            dataSets[i] = expand(dataSets[i], avg)
-    return buildProfile(dataSets)
-
-#Contracts the given dataSet to length N
-def contract(dataSet, N):
-    while len(dataSet) > N:
-        index = random.randint(0,len(dataSet)-2)
-        dataSet[index] = dataSet[index]/2 + dataSet[index+1]/2
-        dataSet = numpy.delete(dataSet, index+1)
-    return dataSet
-
-#Expands the given dataSet to length N
-def expand(dataSet, N):
-    while len(dataSet) < N:
-        index = random.randint(0,len(dataSet)-2)
-        newPoint = dataSet[index]/2 + dataSet[index+1]/2
-        dataSet = numpy.insert(dataSet, index+1, newPoint)
-    return dataSet
-
-#Takes a list of lists of data samples, all of length N
 def buildProfile(dataSets):
-    #indices 0, 1, and 2 hold mu, sigma, and N respectively
-    #N is the number of samples used to build the average and stdDev
-    #This allows the potential for later addition of samples to the set
-    profile = [profilePoint() for i in range(len(dataSets[0]))]
-    for dataSet in dataSets:
-        for i in range(len(dataSet)):
-            profile[i].addSample(dataSet[i])
-    return profile
+      avg = 0
+      
+      #find average number of samples in the data
+      for dataSet in dataSets:
+		avg += len(dataSet)
+      avg = avg/len(dataSets)
+	
+	
+      sample_period = 1/22050
+      pre_profile = []
+	#for each clip in raw profile
+      for clip in range( len(dataSets) ):
+             print 'Processing clip %d' % clip
+             #calculate new sample period
+             new_period = sample_period * ( avg / len(dataSets[clip]) )
+             new_data = []
+             #interpolate data
+             for sample in range( len(dataSets[clip]) ):
+                 if sample == 0:
+                     new_data.append( dataSets[clip][sample] )
+                 else:
+                     #equation for linear interpolation
+                     data = dataSets[clip][sample-1] + (dataSets[clip][sample] - dataSets[clip][sample-1]) * ( sample*sample_period - (sample-1)*new_period ) / ( sample*new_period - (sample-1)*new_period ) 
+                     new_data.append(data)
+             pre_profile.append(new_data)
+	
+      profile = []
+      for i in range(len(pre_profile)):
+          print 'Adding processed data to profile: Clip %d' % i
+          count = 0
+          stat = []
+          for j in range(len(pre_profile[i])):
+			if j == count:
+				stat.append(pre_profile[i][j])
+                       j += 2
+                       count += 1
+          mean = numpy.mean(stat)
+          stdev = numpy.std(stat)
+          print repr(mean)
+          print repr(stdev)
+          profile.append( (mean, stdev) )
+  
+      return profile
 
-#Takes a sample and sizes it to the same length as profile, for verification
-def preVerifyUser(profile, sample):
-    if (len(profile) * (1 + TIME_THRESHOLD)) < len(sample):
-        return false
-    if (len(profile) * (1 - TIME_THRESHOLD)) > len(sample):
-        return false
-    if len(sample) > len(profile):
-        sample = contract(sample, len(profile))
-    elif len(sample) < len(profile):
-        sample = expand(sample, len(profile))
-    return verifyUser(profile, sample)
 
 #Takes a profile and a new set of adjusted length and determines if it passes
 #Could also add the sample to the profile if it passes, to allow learning
@@ -107,63 +128,70 @@ def pcmProfile(path):
             files.sort()
             dataSets = []
             for fileName in files:
+                print 'Trimming file %s' % fileName
                 filePath = join(root, fileName)
-                startEnd = SoundUtil.findStartEnd(join(root, fileName), 2000)
+                startEnd = findStartEnd(join(root, fileName), 2000)
                 if (startEnd[0] != -1):
                     data = numpy.memmap(filePath, dtype='int16')
                     dataSets.append(data)
-    #profile = preBuildProfile(dataSets)
-    #out_path = os.path.join(path, "profile.p")
-    #if not os.path.exists(out_path):
-        #os.makedirs(out_path)
-    #proFile = io.open(out_path, 'w+')
-    #pickle.dump(profile, proFile)
-    return preBuildProfile(dataSets)
-                    
+    print 'Done Trimming'
+    
+    print 'Building Profile'
+    profile = buildProfile(dataSets)
+    profile = bytes(profile)
+    out_path = os.path.join(path, "profile.p")
+    
+    proFile = io.open(out_path, 'wb')
+    
+    print 'Writing Profile to %s' % out_path
+    pickle.dump(profile, proFile)
 
-def graphTest(profile):
-    #Create figure to graph with
-    fig = figure(figsize=(16,12))
-    fig.suptitle("Jacob's Test")
-    #Setup plot of path traced
-    #subplot(1,2,1)
-    #xlim(0,800)
-    #ylim(1280,0)
-    #title("Challenge/Response Path")
-    #xlabel("X location (pixels)")
-    #ylabel("Y location (pixels)")
-    #CX = np.array(challengeX)
-    #CY = np.array(challengeY)
-    #plot(CX, CY, color='green', linewidth=2, linestyle="--", label="Generated Challenge")
-    #RX = np.array(respX)
-    #RY = np.array(respY)
-    #plot(RX, RY, color='blue', linewidth=2, label="User Response")
-    #annotate("Start", xy=(challengeX[0], challengeY[0]), bbox=dict(facecolor='white', edgecolor='None', alpha=0.65 ))
-    #annotate("End", xy=(challengeX[-1], challengeY[-1]), bbox=dict(facecolor='white', edgecolor='None', alpha=0.65 ))
-    #legend(loc='upper left')
-    #Setup plot of pressure data
-    subplot(1,2,1)
-    title("Overlay")
-    xlabel("Points")
-    ylabel("Magnitude")
-    maximum = 0
-    averages = [0 for i in range(len(profile))]
-    stddevs = [0 for i in range(len(profile))]
-    for point in profile:
-        if point.avg > maximum:
-            maximum = point.avg
-    i = 0
-    xlim(0, len(profile))
-    ylim(0, 1.0)
-    for point in profile:
-        averages[i] = point.avg
-        stddevs[i] = point.stddev
-        i = i + 1
-    posDevs = [averages[i] + (2 * stddevs[i]) for i in range(len(profile))]
-    negDevs = [averages[i] - (2 * stddevs[i]) for i in range(len(profile))]
-    PTS = np.linspace(1,len(profile), len(profile))
-    plot(PTS, averages, color='blue', linewidth=2, label="Averages")
-    plot(PTS, posDevs, color='red', linewidth=2, label="+2 devs")
-    plot(PTS, negDevs, color='green', linewidth=2, label="-2 devs")
-    legend(loc='lower right')
-    show()
+    #return preBuildProfile(dataSets)
+    return True                
+
+# def graphTest(profile):
+    # #Create figure to graph with
+    # fig = figure(figsize=(16,12))
+    # fig.suptitle("Jacob's Test")
+    # #Setup plot of path traced
+    # #subplot(1,2,1)
+    # #xlim(0,800)
+    # #ylim(1280,0)
+    # #title("Challenge/Response Path")
+    # #xlabel("X location (pixels)")
+    # #ylabel("Y location (pixels)")
+    # #CX = np.array(challengeX)
+    # #CY = np.array(challengeY)
+    # #plot(CX, CY, color='green', linewidth=2, linestyle="--", label="Generated Challenge")
+    # #RX = np.array(respX)
+    # #RY = np.array(respY)
+    # #plot(RX, RY, color='blue', linewidth=2, label="User Response")
+    # #annotate("Start", xy=(challengeX[0], challengeY[0]), bbox=dict(facecolor='white', edgecolor='None', alpha=0.65 ))
+    # #annotate("End", xy=(challengeX[-1], challengeY[-1]), bbox=dict(facecolor='white', edgecolor='None', alpha=0.65 ))
+    # #legend(loc='upper left')
+    # #Setup plot of pressure data
+    # subplot(1,2,1)
+    # title("Overlay")
+    # xlabel("Points")
+    # ylabel("Magnitude")
+    # maximum = 0
+    # averages = [0 for i in range(len(profile))]
+    # stddevs = [0 for i in range(len(profile))]
+    # for point in profile:
+        # if point.avg > maximum:
+            # maximum = point.avg
+    # i = 0
+    # xlim(0, len(profile))
+    # ylim(0, 1.0)
+    # for point in profile:
+        # averages[i] = point.avg
+        # stddevs[i] = point.stddev
+        # i = i + 1
+    # posDevs = [averages[i] + (2 * stddevs[i]) for i in range(len(profile))]
+    # negDevs = [averages[i] - (2 * stddevs[i]) for i in range(len(profile))]
+    # PTS = np.linspace(1,len(profile), len(profile))
+    # plot(PTS, averages, color='blue', linewidth=2, label="Averages")
+    # plot(PTS, posDevs, color='red', linewidth=2, label="+2 devs")
+    # plot(PTS, negDevs, color='green', linewidth=2, label="-2 devs")
+    # legend(loc='lower right')
+    # show()
